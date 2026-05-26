@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>ISACA Check-In</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+ 
+    body {
+      font-family: Arial, sans-serif;
+      background: #f0f4f8;
+      padding: 16px;
+      color: #111;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+ 
+    h1 {
+      text-align: center;
+      color: #173A7A;
+      font-size: 20px;
+      margin-bottom: 16px;
+      padding-top: 8px;
+    }
+ 
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+ 
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+ 
+    button {
+      background: #173A7A;
+      color: white;
+      border: none;
+      padding: 13px 16px;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+      flex: 1;
+    }
+ 
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    button.danger   { background: #c0392b; }
+ 
+    button.mode-btn {
+      background: #e8edf5;
+      color: #173A7A;
+      font-weight: bold;
+    }
+    button.mode-btn.active {
+      background: #173A7A;
+      color: white;
+    }
+ 
+    #modeLabel {
+      text-align: center;
+      font-weight: bold;
+      color: #173A7A;
+      margin: 10px 0 4px;
+      font-size: 15px;
+    }
+ 
+    #scanner {
+      width: 100%;
+      margin: 12px auto;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+ 
+    #status {
+      margin-top: 8px;
+      font-size: 14px;
+      min-height: 20px;
+      line-height: 1.4;
+    }
+ 
+    .ok   { color: #0a7a2f; font-weight: bold; }
+    .dup  { color: #b66a00; font-weight: bold; }
+    .err  { color: #b00020; font-weight: bold; }
+    .info { color: #173A7A; }
+ 
+    #result {
+      margin-top: 10px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #f6f8fa;
+      font-size: 16px;
+      display: none;
+      line-height: 1.5;
+    }
+ 
+    input[type="text"] {
+      padding: 11px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 15px;
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+ 
+    #searchResults { margin-top: 10px; }
+ 
+    .search-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+      gap: 10px;
+    }
+ 
+    .search-item button {
+      flex: 0;
+      min-width: 90px;
+      font-size: 13px;
+      padding: 8px 10px;
+    }
+ 
+    #log {
+      font-size: 11px;
+      white-space: pre-wrap;
+      max-height: 120px;
+      overflow: auto;
+      background: #fafafa;
+      border: 1px dashed #ddd;
+      padding: 8px;
+      border-radius: 8px;
+      font-family: monospace;
+    }
+ 
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid #ccc;
+      border-top-color: #173A7A;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+ 
+<h1>🏷️ ISACA Check-In</h1>
+ 
+<!-- MODE -->
+<div class="card">
+  <div class="row">
+    <button class="mode-btn active" id="btnWorkshop" onclick="setMode('workshop')">Workshop</button>
+    <button class="mode-btn" id="btnConference" onclick="setMode('conference')">Conference</button>
+  </div>
+  <div id="modeLabel">WORKSHOP MODE</div>
+</div>
+ 
+<!-- SCANNER -->
+<div class="card">
+  <div class="row">
+    <button id="btnStart" onclick="startScanner()">▶ Pokreni skener</button>
+    <button id="btnStop" class="danger" onclick="stopScanner()" disabled>■ Zaustavi</button>
+  </div>
+ 
+  <div id="status" class="info" style="margin-top:10px;">Izaberite mode i pokrenite skener.</div>
+  <div id="scanner"></div>
+  <div id="result"></div>
+</div>
+ 
+<!-- MANUAL SEARCH -->
+<div class="card">
+  <b>Ručna pretraga</b>
+  <div style="margin-top:10px;">
+    <input type="text" id="searchBox" placeholder="Ime, prezime ili email..." />
+    <button onclick="searchAttendee()">Traži</button>
+  </div>
+  <div id="searchResults"></div>
+</div>
+ 
+<!-- MANUAL QR -->
+<div class="card">
+  <b>Ručni unos QR ID</b>
+  <div style="margin-top:10px;">
+    <input type="text" id="manualQR" placeholder="Unesite QR_ID..." />
+    <button onclick="submitManual()">Upiši</button>
+  </div>
+</div>
+ 
+<!-- LOG -->
+<div class="card">
+  <b style="font-size:12px;">Dnevnik (debug)</b>
+  <div id="log" style="margin-top:6px;"></div>
+</div>
+ 
+<script>
+// ─── KONFIGURACIJA ───────────────────────────────────────────
+// Tvoj Apps Script deployment URL
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBNnzOUhW0aQGVpV2EFIVnIIN1ckR2rp2Ygpm1xX21dwQcGkIHX6cOxcMw13_8Ks0Q/exec';
+// ─────────────────────────────────────────────────────────────
+ 
+let currentMode  = 'workshop';
+let html5QrCode  = null;
+let isScanning   = false;
+let lastScanned  = 0;
+ 
+// ── LOG ──
+function log(msg) {
+  const el = document.getElementById('log');
+  const line = '[' + new Date().toLocaleTimeString() + '] ' + msg + '\n';
+  el.textContent = (line + el.textContent).slice(0, 5000);
+}
+ 
+// ── STATUS / RESULT ──
+function setStatus(html, cls) {
+  const s = document.getElementById('status');
+  s.innerHTML = html;
+  s.className = cls || '';
+}
+ 
+function showResult(html, cls) {
+  const r = document.getElementById('result');
+  r.style.display = 'block';
+  r.className = cls || '';
+  r.innerHTML = html;
+}
+ 
+// ── MODE ──
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('modeLabel').textContent =
+    (mode === 'workshop' ? 'WORKSHOP' : 'CONFERENCE') + ' MODE';
+  document.getElementById('btnWorkshop').className =
+    'mode-btn' + (mode === 'workshop' ? ' active' : '');
+  document.getElementById('btnConference').className =
+    'mode-btn' + (mode === 'conference' ? ' active' : '');
+  log('Mode: ' + mode.toUpperCase());
+}
+ 
+// ── iOS DETEKCIJA ──
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+ 
+// ── SKENER ──
+async function startScanner() {
+  if (isScanning) return;
+  document.getElementById('btnStart').disabled = true;
+  setStatus('<span class="spinner"></span>Tražim dozvolu za kameru…', 'info');
+  log('startScanner. iOS=' + isIOS());
+ 
+  // KORAK 1: Eksplicitno zatraži dozvolu (kritično za iOS)
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } }
+    });
+    stream.getTracks().forEach(t => t.stop());
+    log('Camera permission: GRANTED');
+  } catch (err) {
+    log('Camera permission DENIED: ' + err.message);
+    setStatus('❌ Kamera odbijena. Proverite dozvole u podešavanjima → ' +
+      (isIOS() ? 'Safari/Chrome → Kamera → Dozvoli' : 'Chrome → Dozvole sajta → Kamera'), 'err');
+    document.getElementById('btnStart').disabled = false;
+    return;
+  }
+ 
+  // KORAK 2: Pokreni html5-qrcode
+  try {
+    if (html5QrCode) {
+      try { await html5QrCode.stop(); } catch(_) {}
+      try { await html5QrCode.clear(); } catch(_) {}
+      html5QrCode = null;
+    }
+ 
+    html5QrCode = new Html5Qrcode('scanner', { verbose: false });
+ 
+    // iOS: uvek facingMode (deviceId ne radi)
+    // Android: pokušaj back kameru, fallback na facingMode
+    let camConfig;
+ 
+    if (isIOS()) {
+      log('iOS: using facingMode environment');
+      camConfig = { facingMode: { exact: 'environment' } };
+    } else {
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        log('Cameras: ' + devices.length);
+        if (devices && devices.length > 0) {
+          const back = devices.find(d => /back|rear|environment/i.test(d.label || ''))
+                    || devices[devices.length - 1];
+          log('Using: ' + (back.label || back.id));
+          camConfig = { deviceId: { exact: back.id } };
+        } else {
+          camConfig = { facingMode: { ideal: 'environment' } };
+        }
+      } catch(_) {
+        camConfig = { facingMode: { ideal: 'environment' } };
+      }
+    }
+ 
+    await html5QrCode.start(
+      camConfig,
+      {
+        fps: 10,
+        qrbox: function(w, h) {
+          const s = Math.round(Math.min(w, h) * 0.72);
+          return { width: s, height: s };
+        },
+        aspectRatio: 1.0
+      },
+      onScanSuccess,
+      () => {} // ignoriši scan failure
+    );
+ 
+    isScanning = true;
+    document.getElementById('btnStop').disabled = false;
+    setStatus('✅ Skener aktivan — približite QR kod.', 'ok');
+    log('Scanner started OK');
+ 
+  } catch (e) {
+    log('Scanner start FAILED: ' + e);
+    // iOS: ako exact ne radi, pokušaj ideal
+    if (isIOS() && String(e).includes('exact')) {
+      log('Retrying iOS with ideal facingMode...');
+      await startIOSFallback();
+    } else {
+      setStatus('❌ Greška kamere: ' + e, 'err');
+      document.getElementById('btnStart').disabled = false;
+    }
+  }
+}
+ 
+async function startIOSFallback() {
+  try {
+    if (html5QrCode) {
+      try { await html5QrCode.stop(); } catch(_) {}
+      try { await html5QrCode.clear(); } catch(_) {}
+    }
+    html5QrCode = new Html5Qrcode('scanner', { verbose: false });
+    await html5QrCode.start(
+      { facingMode: { ideal: 'environment' } },
+      { fps: 10, qrbox: 250 },
+      onScanSuccess, () => {}
+    );
+    isScanning = true;
+    document.getElementById('btnStop').disabled = false;
+    setStatus('✅ Skener aktivan.', 'ok');
+    log('iOS fallback scanner OK');
+  } catch(e) {
+    log('iOS fallback FAILED: ' + e);
+    setStatus('❌ Kamera ne može da se pokrene. Koristite ručnu pretragu.', 'err');
+    document.getElementById('btnStart').disabled = false;
+  }
+}
+ 
+async function stopScanner() {
+  try {
+    if (html5QrCode) {
+      await html5QrCode.stop();
+      await html5QrCode.clear();
+      html5QrCode = null;
+    }
+  } catch(_) {}
+  isScanning = false;
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStop').disabled = true;
+  setStatus('Skener zaustavljen.', 'info');
+  log('Scanner stopped');
+}
+ 
+function onScanSuccess(text) {
+  const now = Date.now();
+  if (now - lastScanned < 2000) return;
+  lastScanned = now;
+  const qr = (text || '').trim();
+  if (!qr) return;
+  log('Scanned: ' + qr);
+  processCheckin(qr);
+}
+ 
+// ── CHECK-IN (fetch ka Apps Script) ──
+function processCheckin(uniqueId) {
+  setStatus('<span class="spinner"></span>Obrađujem…', 'info');
+  log('Checkin: ' + uniqueId + ' mode=' + currentMode);
+ 
+  // Koristimo no-cors fetch + URL parametri
+  // Apps Script mora da ima doGet koji prihvata action, uniqueId, mode parametre
+  const url = APPS_SCRIPT_URL +
+    '?action=checkin' +
+    '&uniqueId=' + encodeURIComponent(uniqueId) +
+    '&mode=' + encodeURIComponent(currentMode);
+ 
+  fetch(url, { method: 'GET', redirect: 'follow' })
+    .then(r => r.json())
+    .then(resp => {
+      log('Response: ' + JSON.stringify(resp));
+      renderResult(resp);
+    })
+    .catch(err => {
+      log('Fetch error: ' + err);
+      // Fallback: otvori URL u novom tabu ako fetch ne radi
+      setStatus('⚠️ Greška komunikacije. Pokušavam alternativno…', 'err');
+      openFallbackCheckin(uniqueId);
+    });
+}
+ 
+function openFallbackCheckin(uniqueId) {
+  const url = APPS_SCRIPT_URL +
+    '?action=checkin' +
+    '&uniqueId=' + encodeURIComponent(uniqueId) +
+    '&mode=' + encodeURIComponent(currentMode);
+  window.open(url, '_blank');
+}
+ 
+function renderResult(resp) {
+  if (!resp) { setStatus('❌ Prazan odgovor.', 'err'); return; }
+ 
+  if (resp.success) {
+    showResult('✅ <b>Evidentirano!</b><br>' + escHtml(resp.attendee || ''), 'ok');
+    setStatus('Uspešno evidentiran.', 'ok');
+    beep(520, 0.08);
+    if (navigator.vibrate) navigator.vibrate(40);
+  } else {
+    const msg = (resp.message || '').toLowerCase();
+    if (msg.includes('already') || msg.includes('duplikat')) {
+      showResult('⚠️ <b>Već evidentiran:</b><br>' + escHtml(resp.attendee || ''), 'dup');
+      setStatus('Duplikat.', 'dup');
+      beep(280, 0.08);
+      if (navigator.vibrate) navigator.vibrate([20,40,20]);
+    } else {
+      showResult('❌ <b>Nije pronađen:</b> ' + escHtml(resp.message || ''), 'err');
+      setStatus('QR nije na spisku.', 'err');
+      beep(200, 0.12);
+      if (navigator.vibrate) navigator.vibrate([60,40,60]);
+    }
+  }
+}
+ 
+// ── SEARCH ──
+function searchAttendee() {
+  const q = document.getElementById('searchBox').value.trim();
+  if (!q) return;
+  log('Search: ' + q);
+ 
+  const url = APPS_SCRIPT_URL + '?action=search&query=' + encodeURIComponent(q);
+ 
+  fetch(url, { method: 'GET', redirect: 'follow' })
+    .then(r => r.json())
+    .then(results => showSearchResults(results))
+    .catch(err => {
+      log('Search error: ' + err);
+      setStatus('❌ Greška pretrage.', 'err');
+    });
+}
+ 
+function showSearchResults(results) {
+  const container = document.getElementById('searchResults');
+  if (!results || !results.length) {
+    container.innerHTML = '<p style="color:#888;font-size:14px;margin-top:8px;">Nema rezultata.</p>';
+    return;
+  }
+  let html = '';
+  results.forEach(function(r) {
+    html += '<div class="search-item">' +
+      '<span>' + escHtml(r.name) + '</span>' +
+      '<button onclick="processCheckin(\'' + escHtml(r.uniqueId) + '\')">Check-In</button>' +
+      '</div>';
+  });
+  container.innerHTML = html;
+}
+ 
+// ── MANUAL QR ──
+function submitManual() {
+  const v = (document.getElementById('manualQR').value || '').trim();
+  if (!v) return;
+  document.getElementById('manualQR').value = '';
+  processCheckin(v);
+}
+ 
+document.getElementById('manualQR').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitManual();
+});
+document.getElementById('searchBox').addEventListener('keydown', e => {
+  if (e.key === 'Enter') searchAttendee();
+});
+ 
+// ── ZVUK ──
+function beep(freq, dur) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.value = 0.05;
+    o.connect(g); g.connect(ctx.destination);
+    o.start();
+    setTimeout(() => { o.stop(); ctx.close(); }, Math.max(10, dur * 1000));
+  } catch(_) {}
+}
+ 
+// ── UTIL ──
+function escHtml(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+ 
+// ── INIT ──
+log('Loaded. iOS=' + isIOS());
+setMode('workshop');
+</script>
+</body>
+</html>
