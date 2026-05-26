@@ -197,7 +197,18 @@
     <button onclick="submitManual()">Upiši</button>
   </div>
 </div>
- 
+
+<!-- ADMIN DASHBOARD -->
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <b>Admin — Statistika</b>
+    <button onclick="loadDashboard()" style="flex:0;min-width:90px;font-size:13px;padding:8px;">🔄 Osveži</button>
+  </div>
+  <div id="dashboardContent">
+    <p style="color:#888;font-size:14px;">Učitavanje...</p>
+  </div>
+</div>s
+  
 <!-- LOG -->
 <div class="card">
   <b style="font-size:12px;">Dnevnik (debug)</b>
@@ -446,6 +457,7 @@ function openFallbackCheckin(uniqueId) {
       if (navigator.vibrate) navigator.vibrate([60,40,60]);
     }
   }
+  loadDashboard(); // osvežava statistiku posle svakog skeniranja
 }
 */
 
@@ -583,10 +595,68 @@ function escHtml(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
- 
+
+// ── DASHBOARD ──
+function loadDashboard() {
+  const url = APPS_SCRIPT_URL + '?action=dashboard';
+  const container = document.getElementById('dashboardContent');
+  container.innerHTML = '<span class="spinner"></span> Učitavam...';
+
+  fetch(url, { method: 'GET', redirect: 'follow' })
+    .then(r => r.json())
+    .then(resp => {
+      if (!resp.success) {
+        container.innerHTML = '<p class="err">Greška: ' + escHtml(resp.message || '') + '</p>';
+        return;
+      }
+
+      const keys = [
+        'Total Registered',
+        'Workshop Registered',
+        'Conference Registered',
+        'Workshop Check-In',
+        'Conference Check-In',
+        'QR Emails Sent'
+      ];
+
+      const icons = {
+        'Total Registered':     '👥',
+        'Workshop Registered':  '🔧',
+        'Conference Registered':'🎤',
+        'Workshop Check-In':    '✅',
+        'Conference Check-In':  '✅',
+        'QR Emails Sent':       '📧'
+      };
+
+      let html = '<table style="width:100%;border-collapse:collapse;">';
+      keys.forEach(function(key) {
+        const val = resp.data[key] !== undefined ? resp.data[key] : '—';
+        html += '<tr style="border-bottom:1px solid #eee;">' +
+          '<td style="padding:9px 4px;font-size:14px;color:#555;">' +
+            (icons[key] || '') + ' ' + escHtml(key) +
+          '</td>' +
+          '<td style="padding:9px 4px;font-size:18px;font-weight:bold;color:#173A7A;text-align:right;">' +
+            escHtml(String(val)) +
+          '</td>' +
+        '</tr>';
+      });
+      html += '</table>';
+      html += '<p style="font-size:11px;color:#aaa;margin-top:8px;text-align:right;">Osveženo: ' +
+        new Date().toLocaleTimeString() + '</p>';
+
+      container.innerHTML = html;
+      log('Dashboard loaded OK');
+    })
+    .catch(err => {
+      container.innerHTML = '<p class="err">Greška učitavanja: ' + escHtml(String(err)) + '</p>';
+      log('Dashboard error: ' + err);
+    });
+}
+
 // ── INIT ──
 log('Loaded. iOS=' + isIOS());
 setMode('workshop');
+loadDashboard();
 </script>
 </body>
 </html>
