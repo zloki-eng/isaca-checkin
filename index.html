@@ -423,8 +423,8 @@ function openFallbackCheckin(uniqueId) {
     '&mode=' + encodeURIComponent(currentMode);
   window.open(url, '_blank');
 }
- 
-function renderResult(resp) {
+
+/*function renderResult(resp) {
   if (!resp) { setStatus('❌ Prazan odgovor.', 'err'); return; }
  
   if (resp.success) {
@@ -447,7 +447,74 @@ function renderResult(resp) {
     }
   }
 }
- 
+*/
+
+function renderResult(resp) {
+  if (!resp) { setStatus('❌ Prazan odgovor.', 'err'); return; }
+
+  // Formatiranje uloge
+  const ulogaText = (resp.uloga && resp.uloga.trim())
+    ? resp.uloga.trim()
+    : 'Učesnik';
+
+  const ulogaColor = getUlogaColor(ulogaText);
+
+  const ulogaBadge = `<div style="
+      display:inline-block;
+      margin-top:8px;
+      padding:6px 14px;
+      border-radius:20px;
+      font-size:15px;
+      font-weight:bold;
+      background:${ulogaColor.bg};
+      color:${ulogaColor.text};
+    ">${escHtml(ulogaText)}</div>`;
+
+  if (resp.success) {
+    showResult(
+      '✅ <b>Evidentirano!</b><br>' +
+      escHtml(resp.attendee || '') +
+      '<br>' + ulogaBadge,
+      'ok'
+    );
+    setStatus('Uspešno evidentiran.', 'ok');
+    beep(520, 0.08);
+    if (navigator.vibrate) navigator.vibrate(40);
+
+  } else {
+    const msg = (resp.message || '').toLowerCase();
+    if (msg.includes('already') || msg.includes('duplikat')) {
+      showResult(
+        '⚠️ <b>Već evidentiran:</b><br>' +
+        escHtml(resp.attendee || '') +
+        '<br>' + ulogaBadge,
+        'dup'
+      );
+      setStatus('Duplikat — već evidentirano.', 'dup');
+      beep(280, 0.08);
+      if (navigator.vibrate) navigator.vibrate([20,40,20]);
+    } else {
+      showResult('❌ <b>Nije pronađen:</b> ' + escHtml(resp.message || ''), 'err');
+      setStatus('QR nije na spisku.', 'err');
+      beep(200, 0.12);
+      if (navigator.vibrate) navigator.vibrate([60,40,60]);
+    }
+  }
+}
+
+function getUlogaColor(uloga) {
+  const u = uloga.toLowerCase();
+  if (u.includes('organizator') || u === 'uo') {
+    return { bg: '#173A7A', text: '#ffffff' };   // tamno plava
+  } else if (u.includes('predavač') || u.includes('predavac') || u.includes('speaker')) {
+    return { bg: '#1a7a3a', text: '#ffffff' };   // zelena
+  } else if (u.includes('sponzor') || u.includes('sponsor')) {
+    return { bg: '#8B4500', text: '#ffffff' };   // braon/narandžasta
+  } else {
+    return { bg: '#e8edf5', text: '#173A7A' };   // svetlo plava — regularni učesnik
+  }
+}
+  
 // ── SEARCH ──
 function searchAttendee() {
   const q = document.getElementById('searchBox').value.trim();
